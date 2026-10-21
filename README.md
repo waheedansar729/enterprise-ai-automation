@@ -20,7 +20,7 @@ ai-review-pipeline/
 ```
 
 ## 1. Prerequisites
-Docker Desktop, .NET 8 SDK, Node 20+ (Node/.NET only needed for dev mode or tests).
+Docker Desktop, .NET 8 SDK, Node 20+ (Node/.NET only needed for dev mode or tests) Groq AI Test 9.
 
 ## 2. Run everything with Docker (recommended)
 ```bash
