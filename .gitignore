@@ -1,0 +1,75 @@
+# ==========================================
+# 1. ENVIRONMENT & SECRETS (Sab se ahem!)
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ==========================================
+# 2. .NET / C# (Backend)
+# ==========================================
+# Build results
+[Dd]ebug/
+[Rr]elease/
+bin/
+obj/
+out/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.DotSettings.user
+.vscode/
+
+# Entity Framework Migrations (Optional: agar aap khud migration banate hain to isay uncomment na karein)
+# **/Migrations/
+
+# ==========================================
+# 3. Node.js / React (Frontend)
+# ==========================================
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.pnpm-debug.log
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Frontend cache
+.cache/
+.parcel-cache/
+
+# ==========================================
+# 4. LOGS & DATABASES
+# ==========================================
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local Databases
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+
+# ==========================================
+# 5. OS & EDITOR FILES
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
