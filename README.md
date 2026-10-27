@@ -133,7 +133,7 @@ Without ClickUp: `.\scripts\test-clickup-webhook.ps1 -Secret "<ClickUp__WebhookS
 
 Notes: the webhook reads task name/description from ClickUp and reviews that text only. The generic `POST /api/v1/reviews`
 (Power Automate or any HTTP client) still works too. Webhook testing helper: https://smee.io or https://webhook.site can show
-what ClickUp sends, but they cannot forward to your API signed, use the tunnel above.
+what ClickUp sends, but they cannot forward to your API signed, use the tunnel above Test AI.
 
 ## 6. Power Automate flow (optional, only if you prefer it)
 1. Trigger: ClickUp task/status change (connector, webhook, or scheduled poll, whichever your tenant supports).
