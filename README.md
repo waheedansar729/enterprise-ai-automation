@@ -163,7 +163,7 @@ what ClickUp sends, but they cannot forward to your API signed, use the tunnel a
 - API container unhealthy: `docker compose logs api` (usually wrong `DB_PASSWORD` after changing .env: run `docker compose down -v` once).
 - Jobs stay Queued: worker not running or crashed: `docker compose logs worker`.
 - `Llm__Provider=Anthropic requires Llm__ApiKey`: the API/worker refuse to start without the key (by design). -->
-# AI Review Pipeline (ClickUp / GitHub → .NET API → Worker → LLM → ClickUp / GitHub PR + React Dashboard)
+<!-- # AI Review Pipeline (ClickUp / GitHub → .NET API → Worker → LLM → ClickUp / GitHub PR + React Dashboard)
 
 Yeh ek automated AI code review system hai. Jab bhi ClickUp mein koi task "Under Review" hota hai ya GitHub par koi naya Pull Request (PR) aata hai, yeh system automatically us code ko LLM (Groq/Anthropic) ke paas bhejta hai, bugs aur security issues dhoondta hai, aur seedha ClickUp task ya GitHub PR par comment post karta hai.
 # AI Review Pipeline (ClickUp / GitHub → .NET API → Worker → LLM → ClickUp / GitHub PR + React Dashboard)
@@ -185,4 +185,28 @@ enterprise-ai-automation/
 │   │   ├── Automation.Api/             # minimal API: /api/v1/... (Program.cs, Dockerfile)
 │   │   └── Automation.Worker/          # background worker loops
 │   └── tests/Automation.UnitTests/
+└── frontend/                   # React + TypeScript (Vite) dashboard -->
+# AI Review Pipeline
+
+An automated AI-powered code review system that integrates with **ClickUp** and **GitHub**. 
+
+Whenever a ClickUp task status is changed to "Under Review" or a new Pull Request (PR) is created on GitHub, the system automatically fetches the code/text and sends it to a Large Language Model (LLM) such as **Groq** or **Anthropic**. The AI analyzes the code for bugs, security vulnerabilities, and reliability issues, and automatically posts the findings as a comment directly back to the ClickUp task or GitHub PR.
+
+## 📁 Repository Structure
+
+```text
+enterprise-ai-automation/
+├── docker-compose.yml          # Defines frontend, api, worker, postgres, and ngrok services
+├── .env.example                # Template for environment variables (copy to .env)
+├── scripts/
+│   ├── smoke-test.ps1          # End-to-end test script (Windows PowerShell)
+│   └── smoke-test.sh           # End-to-end test script (bash / Git Bash / WSL)
+├── backend/
+│   ├── Automation.sln
+│   ├── src/
+│   │   ├── Automation.Core/            # Entities, contracts, validation, prompt building, ReviewProcessor
+│   │   ├── Automation.Infrastructure/  # EF Core + PostgreSQL, LLM clients, ClickUp + GitHub clients
+│   │   ├── Automation.Api/             # Minimal API: /api/v1/... (webhooks, health checks)
+│   │   └── Automation.Worker/          # Background worker loops for processing jobs
+│   └── tests/Automation.UnitTests/     # Unit tests for core logic
 └── frontend/                   # React + TypeScript (Vite) dashboard
