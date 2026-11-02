@@ -5,7 +5,7 @@ ai-review-pipeline/
 ├── docker-compose.yml          # frontend + api + worker + postgres
 ├── .env.example                # copy to .env
 ├── scripts/
-│   ├── smoke-test.ps1          # end-to-end test (Windows PowerShell)
+│   ├── smoke-test.ps1          # end-to-end test test (Windows PowerShell)
 │   └── smoke-test.sh           # end-to-end test (bash / Git Bash / WSL)
 ├── backend/
 │   ├── Automation.sln
