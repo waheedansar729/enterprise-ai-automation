@@ -209,4 +209,4 @@ enterprise-ai-automation/
 │   │   ├── Automation.Api/             # Minimal API: /api/v1/... (webhooks, health checks)
 │   │   └── Automation.Worker/          # Background worker loops for processing jobs
 │   └── tests/Automation.UnitTests/     # Unit tests for core logic
-└── frontend/                   # React + TypeScript (Vite) dashboard
+└── frontend/                   # React + TypeScript (Vite) dashboard// test change
