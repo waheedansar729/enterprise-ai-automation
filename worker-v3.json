@@ -1,0 +1,96 @@
+{
+    "containerDefinitions":  [
+                                 {
+                                     "name":  "worker",
+                                     "image":  "534670738578.dkr.ecr.ap-southeast-2.amazonaws.com/ai-review/worker:v3",
+                                     "cpu":  0,
+                                     "portMappings":  [
+
+                                                      ],
+                                     "essential":  true,
+                                     "environment":  [
+                                                         {
+                                                             "name":  "ASPNETCORE_ENVIRONMENT",
+                                                             "value":  "Production"
+                                                         }
+                                                     ],
+                                     "environmentFiles":  [
+
+                                                          ],
+                                     "mountPoints":  [
+
+                                                     ],
+                                     "volumesFrom":  [
+
+                                                     ],
+                                     "secrets":  [
+                                                     {
+                                                         "name":  "ClickUp__ApiToken",
+                                                         "valueFrom":  "arn:aws:secretsmanager:ap-southeast-2:534670738578:secret:automation/clickup-SipuSr:apitoken::"
+                                                     },
+                                                     {
+                                                         "name":  "ConnectionStrings__Default",
+                                                         "valueFrom":  "arn:aws:secretsmanager:ap-southeast-2:534670738578:secret:automation/db-1vg6JQ:ConnectionStrings__Default::"
+                                                     },
+                                                     {
+                                                         "name":  "GitHub__Token",
+                                                         "valueFrom":  "arn:aws:secretsmanager:ap-southeast-2:534670738578:secret:automation/github-XnbeSg:token::"
+                                                     },
+                                                     {
+                                                         "name":  "GitHub__WebhookSecret",
+                                                         "valueFrom":  "arn:aws:secretsmanager:ap-southeast-2:534670738578:secret:automation/github-XnbeSg:token::"
+                                                     },
+                                                     {
+                                                         "name":  "Llm__ApiKey",
+                                                         "valueFrom":  "arn:aws:secretsmanager:ap-southeast-2:534670738578:secret:automation/llm-jdgzHr:apikey::"
+                                                     },
+                                                     {
+                                                         "name":  "Llm__Model",
+                                                         "valueFrom":  "arn:aws:secretsmanager:ap-southeast-2:534670738578:secret:automation/llm-jdgzHr:model::"
+                                                     },
+                                                     {
+                                                         "name":  "WebhookAuth__ApiKey",
+                                                         "valueFrom":  "arn:aws:secretsmanager:ap-southeast-2:534670738578:secret:automation/webhookauth-vCmsDB:apikey::"
+                                                     }
+                                                 ],
+                                     "ulimits":  [
+
+                                                 ],
+                                     "logConfiguration":  {
+                                                              "logDriver":  "awslogs",
+                                                              "options":  {
+                                                                              "awslogs-group":  "/ecs/automation-worker",
+                                                                              "awslogs-create-group":  "true",
+                                                                              "awslogs-region":  "ap-southeast-2",
+                                                                              "awslogs-stream-prefix":  "ecs"
+                                                                          },
+                                                              "secretOptions":  [
+
+                                                                                ]
+                                                          },
+                                     "systemControls":  [
+
+                                                        ]
+                                 }
+                             ],
+    "family":  "automation-worker",
+    "taskRoleArn":  "arn:aws:iam::534670738578:role/ecsTaskExecutionRole",
+    "executionRoleArn":  "arn:aws:iam::534670738578:role/ecsTaskExecutionRole",
+    "networkMode":  "awsvpc",
+    "volumes":  [
+
+                ],
+    "placementConstraints":  [
+
+                             ],
+    "runtimePlatform":  {
+                            "cpuArchitecture":  "X86_64",
+                            "operatingSystemFamily":  "LINUX"
+                        },
+    "requiresCompatibilities":  [
+                                    "FARGATE"
+                                ],
+    "cpu":  "1024",
+    "memory":  "2048",
+    "enableFaultInjection":  false
+}
