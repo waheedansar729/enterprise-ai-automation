@@ -1,3 +1,4 @@
+
 // using System.Security.Cryptography;
 // using System.Text;
 // using System.Text.Json.Serialization;
@@ -22,9 +23,23 @@
 // if (string.IsNullOrWhiteSpace(apiKey))
 //     throw new InvalidOperationException("WebhookAuth__ApiKey is not configured.");
 
+// // 👈 YEH LINE YAHAN HONI CHAHIYE (builder.Build() se PEHLE)
+// builder.Services.AddHttpClient<IGitHubClient, Automation.Infrastructure.GitHub.GitHubService>();
+
 // var app = builder.Build();
 
-// // Create tables on startup (simple for v1; switch to EF migrations before production).
+// // NGROK MIDDLEWARE
+// app.Use(async (ctx, next) =>
+// {
+//     if (ctx.Request.Headers.ContainsKey("X-Forwarded-Host") && 
+//         ctx.Request.Headers["X-Forwarded-Host"].ToString().Contains("ngrok-free.dev"))
+//     {
+//         ctx.Request.Headers["ngrok-skip-browser-warning"] = "true";
+//     }
+//     await next();
+// });
+
+// // Create tables on startup
 // using (var scope = app.Services.CreateScope())
 // {
 //     await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
@@ -61,7 +76,6 @@
 //     }
 //     catch (DbUpdateException)
 //     {
-//         // Two identical events arrived at the same moment: the unique index on EventId protects us.
 //         db.ChangeTracker.Clear();
 //         var dup = await db.ReviewJobs.AsNoTracking().FirstOrDefaultAsync(j => j.EventId == job.EventId, ct);
 //         if (dup is null) throw;
@@ -72,7 +86,7 @@
 
 // var v1 = app.MapGroup("/api/v1");
 
-// // ---- POST /reviews : validate, dedupe, enqueue, return 202 -----------------------------
+// // ---- POST /reviews ----
 // v1.MapPost("/reviews", async (CreateReviewRequest req, HttpContext http, AppDbContext db,
 //     IOptions<ReviewOptions> opt, CancellationToken ct) =>
 // {
@@ -96,7 +110,119 @@
 //     return await Enqueue(db, job, cid, ct);
 // });
 
-// // ---- POST /webhooks/clickup : ClickUp native webhook (free, no Power Automate needed) ----
+// // ---- POST /webhooks/github ----
+// // v1.MapPost("/webhooks/github", async (HttpRequest request, HttpContext http, AppDbContext db, CancellationToken ct) =>
+// // {
+// //     var eventType = request.Headers["X-GitHub-Event"].FirstOrDefault();
+// //     if (eventType != "pull_request") return Results.Ok(new { ignored = true });
+
+// //     using var reader = new StreamReader(request.Body);
+// //     var body = await reader.ReadToEndAsync(ct);
+    
+// //     try
+// //     {
+// //         var payload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
+// //         var action = payload.GetProperty("action").GetString();
+        
+// //         if (action == "opened" || action == "synchronize")
+// //         {
+// //             var repo = payload.GetProperty("repository").GetProperty("full_name").GetString();
+// //             var prNum = payload.GetProperty("number").GetInt32();
+// //             var title = payload.GetProperty("pull_request").GetProperty("title").GetString();
+// //             var prUrl = payload.GetProperty("pull_request").GetProperty("html_url").GetString();
+// //             var repoUrl = payload.GetProperty("repository").GetProperty("html_url").GetString();
+// //             var cid = (string)http.Items["cid"]!;
+
+// //             var job = new ReviewJob
+// //             {
+// //                 EventId = $"github-{repo}-{prNum}-{Guid.NewGuid():N}",
+// //                 Source = "GitHub",
+// //                 RepositoryUrl = repoUrl,
+// //                 PullRequestUrl = prUrl,
+// //                 Title = title ?? "",
+// //                 TaskId = $"{repo}#{prNum}",
+// //                 TaskUrl = prUrl ?? "",
+// //                 Status = JobStatus.Queued,
+// //                 CreatedAtUtc = DateTime.UtcNow,
+// //                 CorrelationId = cid
+// //             };
+
+// //             return await Enqueue(db, job, cid, ct);
+// //         }
+// //     }
+// //     catch (Exception ex)
+// //     {
+// //         return Results.BadRequest(new { error = "Invalid GitHub payload", details = ex.Message });
+// //     }
+
+// //     return Results.Ok(new { ignored = true });
+// // });
+// // ---- POST /webhooks/github ----
+// v1.MapPost("/webhooks/github", async (HttpRequest request, HttpContext http, AppDbContext db, IConfiguration cfg, CancellationToken ct) =>
+// {
+//     var secret = cfg["GitHub:WebhookSecret"];
+//     if (string.IsNullOrWhiteSpace(secret))
+//         return Results.Json(new { error = "GitHub__WebhookSecret is not configured." }, statusCode: 503);
+
+//     // GitHub payloads can be bigger than our default 256 KB limit.
+//     var sizeFeature = http.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+//     if (sizeFeature is { IsReadOnly: false }) sizeFeature.MaxRequestBodySize = 1024 * 1024;
+
+//     using var ms = new MemoryStream();
+//     await request.Body.CopyToAsync(ms, ct);
+//     var raw = ms.ToArray();
+
+//     // Only GitHub (who knows the secret) may create review jobs.
+//     if (!GitHubSignature.Verify(secret, raw, request.Headers["X-Hub-Signature-256"].FirstOrDefault()))
+//         return Results.Unauthorized();
+
+//     var eventType = request.Headers["X-GitHub-Event"].FirstOrDefault();
+//     if (eventType == "ping") return Results.Ok(new { pong = true });
+//     if (eventType != "pull_request") return Results.Ok(new { ignored = true, reason = "Not a pull_request event." });
+
+//     try
+//     {
+//         using var doc = System.Text.Json.JsonDocument.Parse(raw);
+//         var root = doc.RootElement;
+
+//         var action = root.GetProperty("action").GetString();
+//         if (action is not ("opened" or "synchronize" or "reopened"))
+//             return Results.Ok(new { ignored = true, reason = $"Action '{action}' is not reviewed." });
+
+//         var pr = root.GetProperty("pull_request");
+//         var title = pr.GetProperty("title").GetString() ?? "";
+//         var prUrl = pr.GetProperty("html_url").GetString() ?? "";
+//         var repoUrl = root.GetProperty("repository").GetProperty("html_url").GetString();
+//         var headSha = pr.GetProperty("head").GetProperty("sha").GetString();
+//         if (string.IsNullOrWhiteSpace(headSha)) headSha = request.Headers["X-GitHub-Delivery"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
+
+//         if (!PullRequestRef.TryParse(prUrl, out var parsed) || parsed is null)
+//             return Results.BadRequest(new { error = "pull_request.html_url is not a valid github.com pull request URL." });
+
+//         var cid = (string)http.Items["cid"]!;
+//         var job = new ReviewJob
+//         {
+//             // Same PR + same commit = same event, so a GitHub redelivery does not create a second review.
+//             EventId = $"github-{parsed.FullName}-{parsed.Number}-{headSha}",
+//             Source = "GitHub",
+//             RepositoryUrl = repoUrl,
+//             PullRequestUrl = prUrl,
+//             Title = title,
+//             TaskId = $"{parsed.FullName}#{parsed.Number}",
+//             TaskUrl = prUrl,
+//             Status = JobStatus.Queued,
+//             CreatedAtUtc = DateTime.UtcNow,
+//             CorrelationId = cid
+//         };
+//         return await Enqueue(db, job, cid, ct);
+//     }
+//     catch (Exception ex) when (ex is System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException)
+//     {
+//         return Results.BadRequest(new { error = "Invalid GitHub payload." });
+//     }
+// });
+
+// // ---- POST /webhooks/clickup ----
 // v1.MapPost("/webhooks/clickup", async (HttpRequest request, HttpContext http, AppDbContext db, IClickUpClient clickUp,
 //     IOptions<ReviewOptions> opt, IConfiguration cfg, CancellationToken ct) =>
 // {
@@ -108,7 +234,6 @@
 //     await request.Body.CopyToAsync(ms, ct);
 //     var raw = ms.ToArray();
 
-//     // ClickUp signs the raw body with HMAC-SHA256 (hex) using the secret returned when the webhook was created.
 //     var expected = Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), raw)).ToLowerInvariant();
 //     var given = (request.Headers["X-Signature"].FirstOrDefault() ?? "").Trim().ToLowerInvariant();
 //     if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(given), Encoding.UTF8.GetBytes(expected)))
@@ -122,7 +247,6 @@
 //     if (!string.Equals(evt.NewStatus, opt.Value.TargetStatus, StringComparison.OrdinalIgnoreCase))
 //         return Results.Ok(new { ignored = true, reason = $"Status '{evt.NewStatus}' is not the review status.", correlationId = cid });
 
-//     // Read task name/description from ClickUp (short timeout; fall back to placeholders so the webhook still answers fast).
 //     ClickUpTask? task = null;
 //     try
 //     {
@@ -130,7 +254,7 @@
 //         cts.CancelAfter(TimeSpan.FromSeconds(4));
 //         task = await clickUp.GetTaskAsync(evt.TaskId, cts.Token);
 //     }
-//     catch (Exception) { /* keep placeholders */ }
+//     catch (Exception) { }
 
 //     var job = new ReviewJob
 //     {
@@ -143,7 +267,7 @@
 //     return await Enqueue(db, job, cid, ct);
 // });
 
-// // ---- GET /reviews : paginated list -----------------------------------------------------
+// // ---- GET /reviews ----
 // v1.MapGet("/reviews", async (AppDbContext db, int? page, int? pageSize, string? status, string? taskId, CancellationToken ct) =>
 // {
 //     var p = Math.Max(1, page ?? 1);
@@ -160,7 +284,7 @@
 //     return Results.Ok(new { items, page = p, pageSize = ps, total });
 // });
 
-// // ---- GET /reviews/{id} : detail --------------------------------------------------------
+// // ---- GET /reviews/{id} ----
 // v1.MapGet("/reviews/{id:guid}", async (Guid id, AppDbContext db, CancellationToken ct) =>
 // {
 //     var j = await db.ReviewJobs.AsNoTracking().Include(x => x.Findings).Include(x => x.DeliveryAttempts)
@@ -176,7 +300,7 @@
 //     });
 // });
 
-// // ---- POST /reviews/{id}/retry : manual replay of a failed job or failed write-back ------
+// // ---- POST /reviews/{id}/retry ----
 // v1.MapPost("/reviews/{id:guid}/retry", async (Guid id, HttpContext http, AppDbContext db, CancellationToken ct) =>
 // {
 //     if (!Authorized(http)) return Results.Unauthorized();
@@ -197,14 +321,14 @@
 //     return Results.Accepted($"/api/v1/reviews/{job.Id}", new { jobId = job.Id });
 // });
 
-// // ---- health ----------------------------------------------------------------------------
+// // ---- health ----
 // v1.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
 // v1.MapGet("/health/ready", async (AppDbContext db, CancellationToken ct) =>
 //     await db.Database.CanConnectAsync(ct)
 //         ? Results.Ok(new { status = "ready", database = "ok" })
 //         : Results.Json(new { status = "unavailable", database = "down" }, statusCode: 503));
 
-// // ---- metrics ---------------------------------------------------------------------------
+// // ---- metrics ----
 // v1.MapGet("/metrics/summary", async (AppDbContext db, int? hours, CancellationToken ct) =>
 // {
 //     var since = DateTime.UtcNow.AddHours(-Math.Clamp(hours ?? 24, 1, 24 * 90));
@@ -243,7 +367,7 @@
 // static double? Percentile(List<double> sorted, double p)
 // {
 //     if (sorted.Count == 0) return null;
-//     var idx = (int)Math.Ceiling(p * sorted.Count) - 1; // nearest-rank
+//     var idx = (int)Math.Ceiling(p * sorted.Count) - 1;
 //     return Math.Round(sorted[Math.Clamp(idx, 0, sorted.Count - 1)], 2);
 // }
 
@@ -273,6 +397,17 @@ builder.Services.AddAutomationInfrastructure(builder.Configuration);
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 256 * 1024); // request size limit
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+// 👈 CORS ADD KIYA GAYA HAI
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 // Fail fast if the webhook key is missing (never run with an open webhook).
 var apiKey = builder.Configuration["WebhookAuth:ApiKey"];
 if (string.IsNullOrWhiteSpace(apiKey))
@@ -282,6 +417,9 @@ if (string.IsNullOrWhiteSpace(apiKey))
 builder.Services.AddHttpClient<IGitHubClient, Automation.Infrastructure.GitHub.GitHubService>();
 
 var app = builder.Build();
+
+// 👈 CORS USE KIYA GAYA HAI
+app.UseCors("AllowAll");
 
 // NGROK MIDDLEWARE
 app.Use(async (ctx, next) =>
@@ -366,78 +504,112 @@ v1.MapPost("/reviews", async (CreateReviewRequest req, HttpContext http, AppDbCo
 });
 
 // ---- POST /webhooks/github ----
-v1.MapPost("/webhooks/github", async (HttpRequest request, HttpContext http, AppDbContext db, CancellationToken ct) =>
+v1.MapPost("/webhooks/github", async (HttpRequest request, HttpContext http, AppDbContext db, IConfiguration cfg, CancellationToken ct) =>
 {
-    var eventType = request.Headers["X-GitHub-Event"].FirstOrDefault();
-    if (eventType != "pull_request") return Results.Ok(new { ignored = true });
+    // 1. Secret check
+    var secret = cfg["GitHub:WebhookSecret"];
+    if (string.IsNullOrWhiteSpace(secret))
+        return Results.Json(new { error = "GitHub__WebhookSecret is not configured." }, statusCode: 503);
 
-    using var reader = new StreamReader(request.Body);
-    var body = await reader.ReadToEndAsync(ct);
+    // GitHub payloads can be bigger than our default 256 KB limit.
+    var sizeFeature = http.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+    if (sizeFeature is { IsReadOnly: false }) sizeFeature.MaxRequestBodySize = 1024 * 1024;
     
+    // 2. Raw body read karein
+    using var ms = new MemoryStream();
+    await request.Body.CopyToAsync(ms, ct);
+    var raw = ms.ToArray();
+
+    // Only GitHub (who knows the secret) may create review jobs.
+    // 3. HMAC Signature verify karein
+    if (!GitHubSignature.Verify(secret, raw, request.Headers["X-Hub-Signature-256"].FirstOrDefault()))
+        return Results.Unauthorized();
+    
+    // 4. Event type check karein
+    var eventType = request.Headers["X-GitHub-Event"].FirstOrDefault();
+    if (eventType == "ping") return Results.Ok(new { pong = true });
+    if (eventType != "pull_request") return Results.Ok(new { ignored = true, reason = "Not a pull_request event." });
+
     try
     {
-        var payload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
-        var action = payload.GetProperty("action").GetString();
+        // 5. JSON parse karein
+        using var doc = System.Text.Json.JsonDocument.Parse(raw);
+        var root = doc.RootElement;
+
+        var action = root.GetProperty("action").GetString();
+        if (action is not ("opened" or "synchronize" or "reopened"))
+            return Results.Ok(new { ignored = true, reason = $"Action '{action}' is not reviewed." });
         
-        if (action == "opened" || action == "synchronize")
+        // 6. PR details fetch karein
+        var pr = root.GetProperty("pull_request");
+        var title = pr.GetProperty("title").GetString() ?? "";
+        var prUrl = pr.GetProperty("html_url").GetString() ?? "";
+        var repoUrl = root.GetProperty("repository").GetProperty("html_url").GetString();
+        var headSha = pr.GetProperty("head").GetProperty("sha").GetString();
+        if (string.IsNullOrWhiteSpace(headSha)) headSha = request.Headers["X-GitHub-Delivery"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
+        
+        // 7. PR URL validate karein
+        if (!PullRequestRef.TryParse(prUrl, out var parsed) || parsed is null)
+            return Results.BadRequest(new { error = "pull_request.html_url is not a valid github.com pull request URL." });
+
+        var cid = (string)http.Items["cid"]!;
+        // 8. Database mein job save karein
+        var job = new ReviewJob
         {
-            var repo = payload.GetProperty("repository").GetProperty("full_name").GetString();
-            var prNum = payload.GetProperty("number").GetInt32();
-            var title = payload.GetProperty("pull_request").GetProperty("title").GetString();
-            var prUrl = payload.GetProperty("pull_request").GetProperty("html_url").GetString();
-            var repoUrl = payload.GetProperty("repository").GetProperty("html_url").GetString();
-            var cid = (string)http.Items["cid"]!;
-
-            var job = new ReviewJob
-            {
-                EventId = $"github-{repo}-{prNum}-{Guid.NewGuid():N}",
-                Source = "GitHub",
-                RepositoryUrl = repoUrl,
-                PullRequestUrl = prUrl,
-                Title = title ?? "",
-                TaskId = $"{repo}#{prNum}",
-                TaskUrl = prUrl ?? "",
-                Status = JobStatus.Queued,
-                CreatedAtUtc = DateTime.UtcNow,
-                CorrelationId = cid
-            };
-
-            return await Enqueue(db, job, cid, ct);
-        }
+            // Same PR + same commit = same event, so a GitHub redelivery does not create a second review.
+            EventId = $"github-{parsed.FullName}-{parsed.Number}-{headSha}",
+            Source = "GitHub",
+            RepositoryUrl = repoUrl,
+            PullRequestUrl = prUrl,
+            Title = title,
+            TaskId = $"{parsed.FullName}#{parsed.Number}",
+            TaskUrl = prUrl,
+            Status = JobStatus.Queued,
+            CreatedAtUtc = DateTime.UtcNow,
+            CorrelationId = cid
+        };
+        return await Enqueue(db, job, cid, ct);
     }
-    catch (Exception ex)
+    catch (Exception ex) when (ex is System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException)
     {
-        return Results.BadRequest(new { error = "Invalid GitHub payload", details = ex.Message });
+        return Results.BadRequest(new { error = "Invalid GitHub payload." });
     }
-
-    return Results.Ok(new { ignored = true });
 });
 
 // ---- POST /webhooks/clickup ----
 v1.MapPost("/webhooks/clickup", async (HttpRequest request, HttpContext http, AppDbContext db, IClickUpClient clickUp,
     IOptions<ReviewOptions> opt, IConfiguration cfg, CancellationToken ct) =>
 {
+    // 1. Secret check (HMAC verify)
     var secret = cfg["ClickUp:WebhookSecret"];
     if (string.IsNullOrWhiteSpace(secret))
         return Results.Json(new { error = "ClickUp__WebhookSecret is not configured." }, statusCode: 503);
 
+    // 2. Raw body read karein
     using var ms = new MemoryStream();
     await request.Body.CopyToAsync(ms, ct);
     var raw = ms.ToArray();
 
+     // 3. HMAC Signature verify karein
     var expected = Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), raw)).ToLowerInvariant();
     var given = (request.Headers["X-Signature"].FirstOrDefault() ?? "").Trim().ToLowerInvariant();
     if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(given), Encoding.UTF8.GetBytes(expected)))
         return Results.Unauthorized();
 
+    // 4. ClickUp ka JSON parse karein
     var cid = (string)http.Items["cid"]!;
     var evt = ClickUpWebhookParser.Parse(raw);
     if (evt is null) return Results.BadRequest(new { error = "Unreadable webhook body." });
+
+    // 5. Event type check karein
     if (evt.Event != "taskStatusUpdated" || string.IsNullOrWhiteSpace(evt.TaskId))
         return Results.Ok(new { ignored = true, reason = "Not a taskStatusUpdated event.", correlationId = cid });
+
+        // 6. Status check karein (sirf "Under Review")
     if (!string.Equals(evt.NewStatus, opt.Value.TargetStatus, StringComparison.OrdinalIgnoreCase))
         return Results.Ok(new { ignored = true, reason = $"Status '{evt.NewStatus}' is not the review status.", correlationId = cid });
 
+    // 7. ClickUp se task ki details fetch karein
     ClickUpTask? task = null;
     try
     {
@@ -446,7 +618,8 @@ v1.MapPost("/webhooks/clickup", async (HttpRequest request, HttpContext http, Ap
         task = await clickUp.GetTaskAsync(evt.TaskId, cts.Token);
     }
     catch (Exception) { }
-
+    
+    // 8. Database mein job save karein
     var job = new ReviewJob
     {
         EventId = evt.EventId, TaskId = evt.TaskId,
