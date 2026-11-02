@@ -115,7 +115,7 @@ services:
       - "http://api:8080"
       - "--url=https://playlist-repacking-glutton.ngrok-free.dev" # Aapka free static domain
     environment:
-      - NGROK_AUTHTOKEN=3Jc398X0t3OdXWD4IrXoyMn1Urt_DFtotL8iVVbCTUvxnkTU
+            - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     ports:
       - "4040:4040"
     depends_on:
