@@ -12,3 +12,4 @@ public static class Severity
         return i < 0 ? Allowed.Length : i;
     }
 }
+// small test
