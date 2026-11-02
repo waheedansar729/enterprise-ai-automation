@@ -279,7 +279,12 @@ if (string.IsNullOrWhiteSpace(apiKey))
     throw new InvalidOperationException("WebhookAuth__ApiKey is not configured.");
 
 // 👈 YEH LINE YAHAN HONI CHAHIYE (builder.Build() se PEHLE)
-builder.Services.AddHttpClient<IGitHubClient, Automation.Infrastructure.GitHub.GitHubService>();
+// builder.Services.AddHttpClient<IGitHubClient, Automation.Infrastructure.GitHub.GitHubService>();
+// 👈 YAHAN TIMEOUT 120 SECONDS SET KAR DIYA GAYA HAI
+builder.Services.AddHttpClient<IGitHubClient, Automation.Infrastructure.GitHub.GitHubService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
 
 var app = builder.Build();
 
